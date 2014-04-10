@@ -1,0 +1,716 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "Template for Deploying a scalable website running on tomcat and using mysql and DynamoDB as backend",
+	"Parameters": {
+		"ContextRoot": {
+			"Default": "app",
+			"Description": "Context Root of the application to be installed",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "255",
+			"AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+			"ConstraintDescription": "Must be a valid name without any space."
+		},
+		"AppURL": {
+			"Description": "URL of the war file to be installed",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "25555",
+			"ConstraintDescription": "Must be a valid URL pointing to War file that needs to be deployed"
+		},
+		"DBScriptURL": {
+			"Description": "URL of the DB Script to be installed",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "25555",
+			"ConstraintDescription": "Must be a valid URL pointing to Database Script."
+		},
+		"KeyName": {
+			"Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "255",
+			"AllowedPattern": "[\\x20-\\x7E]*",
+			"ConstraintDescription": "can contain only ASCII characters."
+		},
+		"InstanceType": {
+			"Description": "WebServer EC2 instance type",
+			"Type": "String",
+			"Default": "t1.micro",
+			"AllowedValues": ["t1.micro",
+			"m1.small",
+			"m1.medium",
+			"m1.large",
+			"m1.xlarge",
+			"m2.xlarge",
+			"m2.2xlarge",
+			"m2.4xlarge",
+			"m3.xlarge",
+			"m3.2xlarge",
+			"c1.medium",
+			"c1.xlarge",
+			"cc1.4xlarge",
+			"cc2.8xlarge",
+			"cg1.4xlarge"],
+			"ConstraintDescription": "must be a valid EC2 instance type."
+		},
+		"MaxSize": {
+			"Default": "4",
+			"Description": "Maximum number of instances",
+			"Type": "Number"
+		},
+		"MinSize": {
+			"Default": "2",
+			"Description": "Minimum number of instances",
+			"Type": "Number"
+		},
+		"DesiredCapacity": {
+			"Default": "2",
+			"Description": "Desired capacity of instances",
+			"Type": "Number"
+		},
+		"NumberScaleUp": {
+			"Default": "1",
+			"Description": "No of instance to add at a time when scaling up",
+			"Type": "Number"
+		},
+		"NumberScaleDown": {
+			"Default": "1",
+			"Description": "No of instance to remove at a time when scaling down",
+			"Type": "Number"
+		},
+		"DBName": {
+			"Default": "EmployeeDB",
+			"Description": "The MYSQL database name",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "64",
+			"AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+			"ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+		},
+		"DBUsername": {
+			"Default": "admin",
+			"NoEcho": "true",
+			"Description": "The database admin account username",
+			"Type": "String",
+			"MinLength": "1",
+			"MaxLength": "16",
+			"AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+			"ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+		},
+		"DBPassword": {
+			"Default": "password",
+			"NoEcho": "true",
+			"Description": "The database admin account password",
+			"Type": "String",
+			"MinLength": "8",
+			"MaxLength": "41",
+			"AllowedPattern": "[a-zA-Z0-9]*",
+			"ConstraintDescription": "must contain only alphanumeric characters."
+		},
+		"DBClass": {
+			"Default": "db.t1.micro",
+			"Description": "Database instance class",
+			"Type": "String",
+			"AllowedValues": ["db.t1.micro",
+			"db.m1.small",
+			"db.m1.large",
+			"db.m1.xlarge",
+			"db.m2.xlarge",
+			"db.m2.2xlarge",
+			"db.m2.4xlarge"],
+			"ConstraintDescription": "must select a valid database instance type."
+		},
+		"DBAllocatedStorage": {
+			"Default": "5",
+			"Description": "The size of the database (Gb)",
+			"Type": "Number",
+			"MinValue": "5",
+			"MaxValue": "1024",
+			"ConstraintDescription": "must be between 5 and 1024Gb."
+		},
+		"HaskKeyElementName": {
+			"Description": " PrimaryKey Name for DynamoDB Table",
+			"Type": "String",
+			"AllowedPattern": "[a-zA-Z0-9]*",
+			"MinLength": "1",
+			"MaxLength": "2048",
+			"ConstraintDescription": "must contain only alphanumberic characters"
+		},
+		"HaskKeyElementType": {
+			"Description": "Element Type of DynamoDB PrimaryKey",
+			"Type": "String",
+			"Default": "S",
+			"AllowedPattern": "[S|N]",
+			"MinLength": "1",
+			"MaxLength": "1",
+			"ConstraintDescription": "must be either S or N"
+		},
+		"ReadCapacityUnits": {
+			"Description": "Provisioned read throughput for DynamoDB table",
+			"Type": "Number",
+			"Default": "5",
+			"MinValue": "5",
+			"MaxValue": "10000",
+			"ConstraintDescription": "should be between 5 and 10000"
+		},
+		"WriteCapacityUnits": {
+			"Description": "Provisioned write throughput for DynamoDB Table",
+			"Type": "Number",
+			"Default": "10",
+			"MinValue": "5",
+			"MaxValue": "10000",
+			"ConstraintDescription": "should be between 5 and 10000"
+		}
+	},
+	"Mappings": {
+		"AWSInstanceType2Arch": {
+			"t1.micro": {
+				"Arch": "64"
+			},
+			"m1.small": {
+				"Arch": "64"
+			},
+			"m1.medium": {
+				"Arch": "64"
+			},
+			"m1.large": {
+				"Arch": "64"
+			},
+			"m1.xlarge": {
+				"Arch": "64"
+			},
+			"m2.xlarge": {
+				"Arch": "64"
+			},
+			"m2.2xlarge": {
+				"Arch": "64"
+			},
+			"m2.4xlarge": {
+				"Arch": "64"
+			},
+			"m3.xlarge": {
+				"Arch": "64"
+			},
+			"m3.2xlarge": {
+				"Arch": "64"
+			},
+			"c1.medium": {
+				"Arch": "64"
+			},
+			"c1.xlarge": {
+				"Arch": "64"
+			},
+			"cc1.4xlarge": {
+				"Arch": "64HVM"
+			},
+			"cc2.8xlarge": {
+				"Arch": "64HVM"
+			},
+			"cg1.4xlarge": {
+				"Arch": "64HVM"
+			}
+		},
+		"AWSRegionArch2AMI": {
+			"us-east-1": {
+				"32": "ami-a0cd60c9",
+				"64": "ami-aecd60c7",
+				"64HVM": "ami-a8cd60c1"
+			},
+			"us-west-2": {
+				"32": "ami-46da5576",
+				"64": "ami-48da5578",
+				"64HVM": "NOT_YET_SUPPORTED"
+			},
+			"us-west-1": {
+				"32": "ami-7d4c6938",
+				"64": "ami-734c6936",
+				"64HVM": "NOT_YET_SUPPORTED"
+			},
+			"eu-west-1": {
+				"32": "ami-61555115",
+				"64": "ami-6d555119",
+				"64HVM": "ami-67555113"
+			},
+			"ap-southeast-1": {
+				"32": "ami-220b4a70",
+				"64": "ami-3c0b4a6e",
+				"64HVM": "NOT_YET_SUPPORTED"
+			},
+			"ap-southeast-2": {
+				"32": "ami-b3990e89",
+				"64": "ami-bd990e87",
+				"64HVM": "NOT_YET_SUPPORTED"
+			},
+			"ap-northeast-1": {
+				"32": "ami-2a19aa2b",
+				"64": "ami-2819aa29",
+				"64HVM": "NOT_YET_SUPPORTED"
+			},
+			"sa-east-1": {
+				"32": "ami-f836e8e5",
+				"64": "ami-fe36e8e3",
+				"64HVM": "NOT_YET_SUPPORTED"
+			}
+		}
+	},
+	"Resources": {
+		"DynamoDBTable": {
+			"Type": "AWS::DynamoDB::Table",
+			"Properties": {
+				"KeySchema": {
+					"HashKeyElement": {
+						"AttributeName": {
+							"Ref": "HaskKeyElementName"
+						},
+						"AttributeType": {
+							"Ref": "HaskKeyElementType"
+						}
+					}
+				},
+				"ProvisionedThroughput": {
+					"ReadCapacityUnits": {
+						"Ref": "ReadCapacityUnits"
+					},
+					"WriteCapacityUnits": {
+						"Ref": "WriteCapacityUnits"
+					}
+				}
+			}
+		},
+		"DynamoDBUser": {
+			"Type": "AWS::IAM::User",
+			"Properties": {
+				"Policies": [{
+					"PolicyName": "giveAllaccesstoDynamoDB",
+					"PolicyDocument": {
+						"Statement": [{
+							"Effect": "Allow",
+							"Action": ["dynamodb:*"],
+							"Resource": {
+								"Fn::Join": ["",
+								["arn:aws:dynamodb:",
+								{
+									"Ref": "AWS::Region"
+								},
+								":",
+								{
+									"Ref": "AWS::AccountId"
+								},
+								":table/",
+								{
+									"Ref": "DynamoDBTable"
+								}]]
+							}
+						}]
+					}
+				}]
+			}
+		},
+		"DynamoDBUserAccessKey": {
+			"Type": "AWS::IAM::AccessKey",
+			"Properties": {
+				"UserName": {
+					"Ref": "DynamoDBUser"
+				}
+			}
+		},
+		"ELB": {
+			"Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+			"Properties": {
+				"AvailabilityZones": {
+					"Fn::GetAZs": {
+						"Ref": "AWS::Region"
+					}
+				},
+				"HealthCheck": {
+					"HealthyThreshold": "10",
+					"Interval": "30",
+					"Target": "HTTP:8080/app/",
+					"Timeout": "5",
+					"UnhealthyThreshold": "2"
+				},
+				"Listeners": [{
+					"InstancePort": "8080",
+					"LoadBalancerPort": "80",
+					"Protocol": "HTTP",
+					"InstanceProtocol": "HTTP"
+				}]
+			}
+		},
+		"AutoScalingGrp": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
+			"Properties": {
+				"AvailabilityZones": {
+					"Fn::GetAZs": {
+						"Ref": "AWS::Region"
+					}
+				},
+				"Cooldown": "300",
+				"DesiredCapacity": {
+					"Ref": "DesiredCapacity"
+				},
+				"MaxSize": {
+					"Ref": "MaxSize"
+				},
+				"MinSize": {
+					"Ref": "MinSize"
+				},
+				"HealthCheckGracePeriod": "0",
+				"HealthCheckType": "EC2",
+				"LaunchConfigurationName": {
+					"Ref": "LaunchConfig"
+				},
+				"LoadBalancerNames": [{
+					"Ref": "ELB"
+				}]
+			}
+		},
+		"ScaleDownPolicy": {
+			"Type": "AWS::AutoScaling::ScalingPolicy",
+			"Properties": {
+				"AdjustmentType": "ChangeInCapacity",
+				"ScalingAdjustment": {
+					"Ref": "NumberScaleDown"
+				},
+				"AutoScalingGroupName": {
+					"Ref": "AutoScalingGrp"
+				}
+			}
+		},
+		"ScaleUpPolicy": {
+			"Type": "AWS::AutoScaling::ScalingPolicy",
+			"Properties": {
+				"AdjustmentType": "ChangeInCapacity",
+				"ScalingAdjustment": {
+					"Ref": "NumberScaleUp"
+				},
+				"AutoScalingGroupName": {
+					"Ref": "AutoScalingGrp"
+				}
+			}
+		},
+		"AutoScaleAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmDescription": "Alarm for Auto Scaling",
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"EvaluationPeriods": "3",
+				"MetricName": "CPUUtilization",
+				"Namespace": "AWS/EC2",
+				"Period": "300",
+				"Statistic": "Average",
+				"Threshold": "10.0",
+				"AlarmActions": [{
+					"Ref": "ScaleUpPolicy"
+				}],
+				"InsufficientDataActions": [{
+					"Ref": "ScaleDownPolicy"
+				}],
+				"Dimensions": [{
+					"Name": "AutoScalingGroupName",
+					"Value": {
+						"Ref": "AutoScalingGrp"
+					}
+				}]
+			}
+		},
+		"LaunchConfig": {
+			"Type": "AWS::AutoScaling::LaunchConfiguration",
+			"DependsOn": "TempDBServer",
+			"Metadata": {
+				"AWS::CloudFormation::Init": {
+					"config": {
+						"packages": {
+							"yum": {
+								"java-1.6.0-openjdk": [],
+								"tomcat6": []
+							}
+						},
+						"files": {
+							"/tmp/app.war": {
+								"source": {
+									"Ref": "AppURL"
+								},
+								"mode": "000500",
+								"owner": "tomcat",
+								"group": "tomcat"
+							},
+							"/usr/share/tomcat6/lib/mysql-connector.jar": {
+								"source": "http://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.27/mysql-connector-java-5.1.27.jar",
+								"mode": "000500",
+								"owner": "tomcat",
+								"group": "tomcat"
+							}
+						}
+					}
+				}
+			},
+			"Properties": {
+				"ImageId": {
+					"Fn::FindInMap": ["AWSRegionArch2AMI",
+					{
+						"Ref": "AWS::Region"
+					},
+					{
+						"Fn::FindInMap": ["AWSInstanceType2Arch",
+						{
+							"Ref": "InstanceType"
+						},
+						"Arch"]
+					}]
+				},
+				"InstanceType": {
+					"Ref": "InstanceType"
+				},
+				"KeyName": {
+					"Ref": "KeyName"
+				},
+				"SecurityGroups": [{
+					"Ref": "WebServerGrp"
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["#!/bin/bash -v\n",
+						"yum update -y aws-cfn-bootstrap\n",
+						"# Install packages\n",
+						"/opt/aws/bin/cfn-init -s ",
+						{
+							"Ref": "AWS::StackName"
+						},
+						" -r LaunchConfig ",
+						"    --region ",
+						{
+							"Ref": "AWS::Region"
+						},
+						" || error_exit 'Failed to run cfn-init'\n",
+						"mkdir /var/app \n",
+						"#Download & Install JDBC Driver\n",
+						"echo \"database.password=",
+						{
+							"Ref": "DBPassword"
+						},
+						"\" >> /var/app/app.properties\n",
+						"echo \"database.user=",
+						{
+							"Ref": "DBUsername"
+						},
+						"\" >> /var/app/app.properties\n",
+						"echo \"database.driver=com.mysql.jdbc.driver\" >> /var/app/app.properties\n",
+						"echo \"database.url=jdbc:mysql://",
+						{
+							"Fn::GetAtt": ["DBInstance",
+							"Endpoint.Address"]
+						},
+						"/",
+						{
+							"Ref": "DBName"
+						},
+						"\" >> /var/app/app.properties\n",
+						"echo \"dynamodb.table=",
+						{
+							"Ref": "DynamoDBTable"
+						},
+						"\" >> /var/app/app.properties\n",
+						"echo \"dynamodb.accesskey=",
+						{
+							"Ref": "DynamoDBUserAccessKey"
+						},
+						"\" >> /var/app/app.properties\n",
+						"echo \"dynamodb.secretkey=",
+						{
+							"Fn::GetAtt": ["DynamoDBUserAccessKey",
+							"SecretAccessKey"]
+						},
+						"\" >> /var/app/app.properties\n",
+						"#Copy the downloaded war to tomcat's webapps directory\n",
+						"cp /tmp/app.war /usr/share/tomcat6/webapps/",
+						{
+							"Ref": "ContextRoot"
+						},
+						".war\n",
+						"# Tomcat Setup\n",
+						"chown -R tomcat:tomcat /usr/share/tomcat6/\n",
+						"chown -R tomcat:tomcat /var/lib/tomcat6/\n",
+						"service tomcat6 start\n"]]
+					}
+				}
+			}
+		},
+		"WebServerGrp": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Tomcat server security group",
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": "22",
+					"ToPort": "22",
+					"CidrIp": "0.0.0.0/0"
+				},
+				{
+					"IpProtocol": "tcp",
+					"FromPort": "8080",
+					"ToPort": "8080",
+					"CidrIp": "0.0.0.0/0"
+				}]
+			}
+		},
+		"DBInstance": {
+			"Type": "AWS::RDS::DBInstance",
+			"Properties": {
+				"DBName": {
+					"Ref": "DBName"
+				},
+				"Engine": "MySQL",
+				"MasterUsername": {
+					"Ref": "DBUsername"
+				},
+				"DBInstanceClass": {
+					"Ref": "DBClass"
+				},
+				"DBSecurityGroups": [{
+					"Ref": "DBSecurityGroup"
+				}],
+				"AllocatedStorage": {
+					"Ref": "DBAllocatedStorage"
+				},
+				"MasterUserPassword": {
+					"Ref": "DBPassword"
+				}
+			}
+		},
+		"DBSecurityGroup": {
+			"Type": "AWS::RDS::DBSecurityGroup",
+			"Properties": {
+				"GroupDescription": "DB Security group for web servers",
+				"DBSecurityGroupIngress": [{
+					"EC2SecurityGroupName": {
+						"Ref": "WebServerGrp"
+					},
+					"EC2SecurityGroupOwnerId": {
+						"Ref": "AWS::AccountId"
+					}
+				}]
+			}
+		},
+		"TempDBServer": {
+			"Type": "AWS::EC2::Instance",
+			"Metadata": {
+				"AWS::CloudFormation::Init": {
+					"config": {
+						"packages": {
+							"yum": {
+								"mysql": [],
+								"mysql-devel": [],
+								"mysql-libs": []
+							}
+						},
+						"files": {
+							"/tmp/dbscript.sql": {
+								"source": {
+									"Ref": "DBScriptURL"
+								},
+								"mode": "000777",
+								"owner": "root",
+								"group": "root"
+							}
+						}
+					}
+				}
+			},
+			"DependsOn": "DBInstance",
+			"Properties": {
+				"ImageId": {
+					"Fn::FindInMap": ["AWSRegionArch2AMI",
+					{
+						"Ref": "AWS::Region"
+					},
+					{
+						"Fn::FindInMap": ["AWSInstanceType2Arch",
+						{
+							"Ref": "InstanceType"
+						},
+						"Arch"]
+					}]
+				},
+				"InstanceType": {
+					"Ref": "InstanceType"
+				},
+				"SecurityGroups": [{
+					"Ref": "WebServerGrp"
+				}],
+				"KeyName": {
+					"Ref": "KeyName"
+				},
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["",
+						["#!/bin/bash -v\n",
+						"yum update -y aws-cfn-bootstrap\n",
+						"# Install packages\n",
+						"/opt/aws/bin/cfn-init -s ",
+						{
+							"Ref": "AWS::StackName"
+						},
+						" -r TempDBServer ",
+						"    --region ",
+						{
+							"Ref": "AWS::Region"
+						},
+						" || error_exit 'Failed to run cfn-init'\n",
+						"#Install SQL Script on RDS\n",
+						"mysql -u ",
+						{
+							"Ref": "DBUsername"
+						},
+						" -p",
+						{
+							"Ref": "DBPassword"
+						},
+						" --database=",
+						{
+							"Ref": "DBName"
+						},
+						" --host=",
+						{
+							"Fn::GetAtt": ["DBInstance",
+							"Endpoint.Address"]
+						},
+						" < /tmp/dbscript.sql \n",
+						"#Shutdown the instance\n",
+						"shutdown -h now"]]
+					}
+				}
+			}
+		}
+	},
+	"Outputs": {
+		"URL": {
+			"Description": "URL of the hosted website",
+			"Value": {
+				"Fn::Join": ["",
+				["http://",
+				{
+					"Fn::GetAtt": ["ELB",
+					"DNSName"]
+				},
+				"/",
+				{
+					"Ref": "ContextRoot"
+				}]]
+			}
+		},
+		"Attention": {
+			"Description": "A warning for user",
+			"Value": {
+				"Fn::Join": ["",
+				["Please Terminate the temporary EC2 Instance with instance id : ",
+				{
+					"Ref": "TempDBServer"
+				}]]
+			}
+		}
+	}
+}
