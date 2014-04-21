@@ -1,4 +1,4 @@
-aws_project
+CloudFormation Template
 ===================
 
 CloudFormation Template - A generic template for provisioning resources for a fully auto-scalable website. The resources required are taken as user input.
@@ -10,3 +10,4 @@ CloudFormation Template - A generic template for provisioning resources for a fu
 li Uses R 
 li Nine courses 
 li Goes from raw data to data products
+
