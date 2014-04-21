@@ -7,7 +7,6 @@ CloudFormation Template - A generic template for provisioning resources for a fu
 
 ## Data Science Specialization 
 
-li Uses R 
-li Nine courses 
-li Goes from raw data to data products
-
+* Uses R 
+* Nine courses 
+* Goes from raw data to data products
